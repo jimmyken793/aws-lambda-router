@@ -19,6 +19,7 @@ export type ProxyIntegrationResult = Omit<APIGatewayProxyResult, 'statusCode'> &
 export interface ProxyIntegrationRoute {
   path: string
   method: HttpMethod
+  skipParseBody?: boolean
   action: (
     request: ProxyIntegrationEvent<unknown>,
     context: APIGatewayEventRequestContext
@@ -128,14 +129,15 @@ export const process: ProcessMethod<ProxyIntegrationConfig, APIGatewayProxyEvent
       const actionConfig = findMatchingActionConfig(httpMethod, event.path, proxyIntegrationConfig) || {
         action: NO_MATCHING_ACTION,
         routePath: undefined,
-        paths: undefined
+        paths: undefined,
+        skipParseBody: undefined
       }
 
       const proxyEvent: ProxyIntegrationEvent = event
 
       proxyEvent.paths = actionConfig.paths
       proxyEvent.routePath = actionConfig.routePath
-      if (event.body) {
+      if (event.body && !actionConfig.skipParseBody) {
         try {
           proxyEvent.body = JSON.parse(event.body)
         } catch (parseError) {
@@ -146,6 +148,8 @@ export const process: ProcessMethod<ProxyIntegrationConfig, APIGatewayProxyEvent
             body: JSON.stringify({ message: 'body is not a valid JSON', error: 'ParseError' })
           }
         }
+      } else {
+        proxyEvent.body = event.body
       }
       return processActionAndReturn(actionConfig, proxyEvent, context, headers).catch(async (error) => {
         console.log('Error while handling action function.', error)
